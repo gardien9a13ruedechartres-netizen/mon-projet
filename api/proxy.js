@@ -1,69 +1,80 @@
-const ALLOWED_ORIGINS = [
-  "https://jsonplaceholder.typicode.com",
-  "https://api.exemple.com"
+const ALLOWED_CLIENT_ORIGINS = [
+  "https://player-engine.com",
+  "https://trontv.win"
 ];
 
-const ALLOWED_METHODS = ["GET", "POST"];
+const ALLOWED_TARGET_ORIGINS = [
+  "https://jsonplaceholder.typicode.com"
+];
+
+const ALLOWED_METHODS = ["GET", "POST", "OPTIONS"];
+
+function setCors(req, res) {
+  const origin = req.headers.origin;
+
+  if (ALLOWED_CLIENT_ORIGINS.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+}
 
 export default async function handler(req, res) {
+  setCors(req, res);
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
+  if (!ALLOWED_METHODS.includes(req.method)) {
+    return res.status(405).json({
+      error: "Méthode non autorisée"
+    });
+  }
+
+  const target = req.query.url;
+
+  if (!target) {
+    return res.status(400).json({
+      error: "Paramètre url manquant"
+    });
+  }
+
+  let targetUrl;
+
   try {
-    if (!ALLOWED_METHODS.includes(req.method)) {
-      return res.status(405).json({
-        error: "Méthode non autorisée"
-      });
-    }
+    targetUrl = new URL(target);
+  } catch {
+    return res.status(400).json({
+      error: "URL invalide"
+    });
+  }
 
-    const target = req.query.url;
+  if (!ALLOWED_TARGET_ORIGINS.includes(targetUrl.origin)) {
+    return res.status(403).json({
+      error: "API externe non autorisée",
+      origin: targetUrl.origin
+    });
+  }
 
-    if (!target) {
-      return res.status(400).json({
-        error: "Paramètre url manquant"
-      });
-    }
+  const requestBody =
+    req.method === "POST" ? JSON.stringify(req.body || {}) : undefined;
 
-    let targetUrl;
-
-    try {
-      targetUrl = new URL(target);
-    } catch {
-      return res.status(400).json({
-        error: "URL invalide"
-      });
-    }
-
-    const origin = targetUrl.origin;
-
-    if (!ALLOWED_ORIGINS.includes(origin)) {
-      return res.status(403).json({
-        error: "Domaine non autorisé"
-      });
-    }
-
-    const headers = {
-      "Accept": req.headers.accept || "application/json"
-    };
-
-    if (req.headers["content-type"]) {
-      headers["Content-Type"] = req.headers["content-type"];
-    }
-
-    const fetchOptions = {
+  try {
+    const response = await fetch(targetUrl.toString(), {
       method: req.method,
-      headers
-    };
-
-    if (req.method === "POST") {
-      fetchOptions.body = JSON.stringify(req.body || {});
-    }
-
-    const response = await fetch(targetUrl.toString(), fetchOptions);
+      headers: {
+        Accept: req.headers.accept || "application/json",
+        "Content-Type": req.headers["content-type"] || "application/json"
+      },
+      body: requestBody
+    });
 
     const contentType = response.headers.get("content-type") || "text/plain";
     const body = await response.text();
 
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.setHeader("Content-Type", contentType);
 
     return res.status(response.status).send(body);
