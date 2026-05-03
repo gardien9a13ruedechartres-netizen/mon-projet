@@ -1,6 +1,7 @@
 const ALLOWED_CLIENT_ORIGINS = [
   "https://player-engine.com",
-  "https://trontv.win"
+  "https://trontv.win",
+  "https://livewatch.top"
 ];
 
 const ALLOWED_TARGET_ORIGINS = [
